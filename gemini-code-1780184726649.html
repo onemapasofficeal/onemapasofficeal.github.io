@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaiyo VTuber - Full Body Edition</title>
+    <style>
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+        }
+        
+        body, html { 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: #030305; 
+            font-family: 'Segoe UI', sans-serif; 
+        }
+        
+        #app-container { 
+            position: relative; 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        #webcam {
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            width: 140px; 
+            height: 105px;
+            object-fit: cover; 
+            transform: scaleX(-1); 
+            border-radius: 12px;
+            border: 2px solid rgba(255, 71, 87, 0.6); 
+            z-index: 5; 
+            opacity: 0.8;
+            box-shadow: 0 0 15px rgba(255, 71, 87, 0.3);
+        }
+
+        #renderer-3d { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 2; 
+        }
+
+        .menu-controles {
+            position: relative;
+            margin-right: 30px;
+            width: 300px; 
+            background: rgba(6, 6, 10, 0.85); 
+            border-radius: 24px;
+            padding: 24px; 
+            z-index: 10; 
+            color: white; 
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 71, 87, 0.25);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .menu-titulo { 
+            text-align: center; 
+            margin-bottom: 20px; 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            letter-spacing: 3px; 
+            font-weight: 900; 
+            color: #ff4757; 
+        }
+
+        .grid-opcoes { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+        }
+
+        .btn-opcao {
+            background: rgba(255, 255, 255, 0.03); 
+            color: #8f8f9e; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            padding: 14px 18px;
+            border-radius: 14px; 
+            cursor: pointer; 
+            font-size: 11px; 
+            font-weight: 700;
+            text-transform: uppercase; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            transition: all 0.25s ease;
+        }
+
+        .btn-opcao:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: #fff;
+            transform: translateX(-3px);
+        }
+
+        .btn-opcao.ativo { 
+            background: linear-gradient(135deg, #ff4757, #ff6b81); 
+            color: #fff; 
+            border-color: #ff8b94; 
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.4);
+        }
+        
+        .btn-opcao span {
+            font-size: 9px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        #container-aviso {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: #060609; color: white; z-index: 20;
+        }
+
+        .btn-permitir {
+            background: #ff4757; color: white; border: none; padding: 18px 45px;
+            font-size: 13px; font-weight: 800; border-radius: 40px; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 2px;
+            box-shadow: 0 0 30px rgba(255, 71, 87, 0.5);
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="container-aviso">
+            <p>SINCRO-SISTEMA KAIYO FULL BODY V4...</p>
+            <button class="btn-permitir" onclick="inicializarSistemaCompleto()">Iniciar Rastreamento Tracking</button>
+        </div>
+
+        <video id="webcam" autoplay playsinline></video>
+        <div id="renderer-3d"></div>
+
+        <div class="menu-controles">
+            <div class="menu-titulo">Módulos Corporais Kaiyo</div>
+            <div class="grid-opcoes">
+                <button class="btn-opcao ativo" id="btn-rosto" onclick="alternarElemento('rosto')">Rosto e Boca <span>ON</span></button>
+                <button class="btn-opcao ativo" id="btn-cabelo" onclick="alternarElemento('cabelo')">Cabelo + Orelhas <span>ON</span></button>
+                <button class="btn-opcao ativo" id="btn-olho" onclick="alternarElemento('olho')">Olhos Dinâmicos <span>ON</span></button>
+                <button class="btn-opcao ativo" id="btn-peitoral" onclick="alternarElemento('peitoral')">Tronco e Braços <span>ON</span></button>
+                <button class="btn-opcao ativo" id="btn-tanquinhos" onclick="alternarElemento('tanquinhos')">Tanquinho Extremo <span>ON</span></button>
+                <button class="btn-opcao ativo" id="btn-pernas" onclick="alternarElemento('pernas')">Músculos Pernas <span>ON</span></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const painelAviso = document.getElementById('container-aviso');
+        
+        let cena, camera, renderizador, modeloGrupo;
+        let detectorRosto;
+        let objetoAvatar = {};
+        
+        async function inicializarSistemaCompleto() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: 640, height: 480 }, audio: false 
+                });
+                video.srcObject = stream;
+
+                const modeloDeteccao = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+                detectorRosto = await faceLandmarksDetection.createDetector(modeloDeteccao, {
+                    runtime: 'mediapipe',
+                    solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh'
+                });
+
+                painelAviso.style.display = 'none';
+                
+                initMundo3D();
+                cicloRastreamentoVapor();
+
+            } catch (err) {
+                console.error(err);
+                alert("Erro ao carregar os sistemas de câmera ou IA.");
+            }
+        }
+
+        function initMundo3D() {
+            const container = document.getElementById('renderer-3d');
+            cena = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Câmera afastada e rebaixada para enquadrar o corpo inteiro do VTuber
+            camera.position.set(-0.5, -0.6, 5.8);
+
+            renderizador = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+            renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderizador.domElement);
+
+            cena.add(new THREE.AmbientLight(0x555566, 1.4));
+            
+            const neonEsquerdo = new THREE.DirectionalLight(0xff2a5f, 4.5);
+            neonEsquerdo.position.set(-6, 3, 4);
+            
+            const neonDireito = new THREE.DirectionalLight(0x00bfff, 4.0);
+            neonDireito.position.set(6, 2, 4);
+            
+            cena.add(neonEsquerdo, neonDireito);
+
+            modeloGrupo = new THREE.Group();
+            cena.add(modeloGrupo);
+
+            construirGeometriaKaiyo();
+        }
+
+        function construirGeometriaKaiyo() {
+            // PINTURA PREMIUM: Textura acetinada viva reativa à luz ambiente e neons
+            const peleMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffa072,
+                roughness: 0.15,
+                metalness: 0.03
+            });
+
+            const cabeloMaterial = new THREE.MeshStandardMaterial({ color: 0x141419, roughness: 0.5 });
+            const bocaMaterial = new THREE.MeshBasicMaterial({ color: 0x471216 });
+            const caninoMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+            // 1. ROSTO
+            objetoAvatar.rosto = new THREE.Group();
+            const cranio = new THREE.Mesh(new THREE.SphereGeometry(0.44, 32, 32), peleMaterial);
+            cranio.scale.set(1, 1.28, 0.95);
+            objetoAvatar.rosto.add(cranio);
+
+            // CORREÇÃO BOCA (Posicionada à frente do rosto para não sumir no Z-Fighting)
+            objetoAvatar.boca = new THREE.Group();
+            const cavidadeBoca = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.016, 8, 24, Math.PI), bocaMaterial);
+            cavidadeBoca.position.set(0, -0.12, 0.43);
+            cavidadeBoca.rotation.x = 0.05;
+            
+            const denteE = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.05, 4), caninoMaterial);
+            denteE.position.set(-0.045, -0.11, 0.44);
+            denteE.rotation.x = Math.PI;
+            const denteD = denteE.clone(); denteD.position.x = 0.045;
+            
+            objetoAvatar.boca.add(cavidadeBoca, denteE, denteD);
+            objetoAvatar.rosto.add(objetoAvatar.boca);
+            
+            objetoAvatar.rosto.position.y = 0.9;
+            modeloGrupo.add(objetoAvatar.rosto);
+
+            // 2. CABELO + ORELHAS
+            objetoAvatar.cabelo = new THREE.Group();
+            const crinaBase = new THREE.Mesh(new THREE.SphereGeometry(0.48, 16, 16), cabeloMaterial);
+            crinaBase.position.set(0, 1.0, -0.05);
+            objetoAvatar.cabelo.add(crinaBase);
+
+            const orelhaE = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.38, 4), cabeloMaterial);
+            orelhaE.position.set(-0.25, 1.42, 0); orelhaE.rotation.z = 0.22;
+            const orelhaD = orelhaE.clone(); orelhaD.position.x = 0.25; orelhaD.rotation.z = -0.22;
+            objetoAvatar.cabelo.add(orelhaE, orelhaD);
+            modeloGrupo.add(objetoAvatar.cabelo);
+
+            // 3. OLHOS DOURADOS
+            objetoAvatar.olho = new THREE.Group();
+            const materialIris = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const materialPupila = new THREE.MeshBasicMaterial({ color: 0x050505 });
+
+            const irisE = new THREE.Mesh(new THREE.SphereGeometry(0.046, 16, 16), materialIris);
+            irisE.position.set(-0.14, 0.95, 0.42);
+            irisE.scale.set(1.4, 1, 0.4);
+            const pupilaE = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), materialPupila);
+            pupilaE.position.set(-0.14, 0.95, 0.45);
+            pupilaE.scale.set(0.6, 1.2, 0.2);
+
+            const irisD = irisE.clone(); irisD.position.x = 0.14;
+            const pupilaD = pupilaE.clone(); pupilaD.position.x = 0.14;
+            objetoAvatar.olho.add(irisE, pupilaE, irisD, pupilaD);
+            modeloGrupo.add(objetoAvatar.olho);
+
+            // 4. TRONCO E BRAÇOS MUSCULOSOS ADICIONADOS
+            objetoAvatar.peitoral = new THREE.Group();
+            
+            const peitoE = new THREE.Mesh(new THREE.SphereGeometry(0.42, 32, 16), peleMaterial);
+            peitoE.position.set(-0.24, 0.1, 0.15); peitoE.scale.set(1, 0.78, 0.55);
+            const peitoD = peitoE.clone(); peitoD.position.x = 0.24;
+            objetoAvatar.peitoral.add(peitoE, peitoD);
+
+            const abdBase = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.42, 1.5, 32), peleMaterial);
+            abdBase.position.y = -0.45;
+            objetoAvatar.peitoral.add(abdBase);
+
+            // MÚSCULOS DOS BRAÇOS (Ombros e Bíceps volumosos de Anime)
+            const ombroE = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), peleMaterial);
+            ombroE.position.set(-0.68, 0.12, 0);
+            const bicepE = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.5, 16), peleMaterial);
+            bicepE.position.set(-0.74, -0.2, 0);
+            bicepE.rotation.z = 0.15;
+            const antebracoE = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 0.45, 16), peleMaterial);
+            antebracoE.position.set(-0.82, -0.6, 0.05);
+            antebracoE.rotation.z = 0.25;
+
+            const ombroD = ombroE.clone(); ombroD.position.x = 0.68;
+            const bicepD = bicepE.clone(); bicepD.position.x = 0.74; bicepD.rotation.z = -0.15;
+            const antebracoD = antebracoE.clone(); antebracoD.position.x = 0.82; antebracoD.rotation.z = -0.25;
+
+            objetoAvatar.peitoral.add(ombroE, bicepE, antebracoE, ombroD, bicepD, antebracoD);
+            modeloGrupo.add(objetoAvatar.peitoral);
+
+            // 5. TANQUINHO EXTREMO CORRIGIDO (Aparecendo todas as fileiras saltadas para a frente)
+            objetoAvatar.tanquinhos = new THREE.Group();
+            for(let i = 0; i < 4; i++) {
+                const gomoE = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), peleMaterial);
+                gomoE.scale.set(1.15, 0.65, 0.58); 
+                // Coordenadas ajustadas para ficarem centralizadas e saltadas no relevo frontal
+                gomoE.position.set(-0.11, -0.18 - (i * 0.16), 0.48 - (i * 0.03));
+                
+                const gomoD = gomoE.clone(); 
+                gomoD.position.x = 0.11;
+                
+                objetoAvatar.tanquinhos.add(gomoE, gomoD);
+            }
+            modeloGrupo.add(objetoAvatar.tanquinhos);
+
+            // 6. MÚSCULOS DAS PERNAS ADICIONADOS
+            objetoAvatar.pernas = new THREE.Group();
+            
+            // Coxas volumosas esbanjando definição muscular
+            const coxaE = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.8, 16), peleMaterial);
+            coxaE.position.set(-0.24, -1.5, -0.05);
+            const panturrilhaE = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.09, 0.75, 16), peleMaterial);
+            panturrilhaE.position.set(-0.24, -2.2, 0);
+
+            const coxaD = coxaE.clone(); coxaD.position.x = 0.24;
+            const panturrilhaD = panturrilhaE.clone(); panturrilhaD.position.x = 0.24;
+
+            objetoAvatar.pernas.add(coxaE, panturrilhaE, coxaD, panturrilhaD);
+            modeloGrupo.add(objetoAvatar.pernas);
+        }
+
+        async function cicloRastreamentoVapor() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && detectorRosto) {
+                const faces = await detectorRosto.estimateFaces(video, { flipHorizontal: true });
+
+                if (faces.length > 0) {
+                    const pontos = faces[0].keypoints;
+                    const nariz = pontos[4];
+                    const olhoE = pontos[33];
+                    const olhoD = pontos[263];
+
+                    if (nariz && olhoE && olhoD) {
+                        const deltaX = olhoD.x - olhoE.x;
+                        const deltaY = olhoD.y - olhoE.y;
+
+                        const rotaçãoY = Math.atan2(nariz.x - (olhoE.x + deltaX / 2), 140);
+                        const rotaçãoX = Math.atan2(nariz.y - (olhoE.y + deltaY / 2), 140);
+                        const rotaçãoZ = Math.atan2(deltaY, deltaX);
+
+                        // Movimentação sincronizada e suave de todo o corpo estruturado do Kaiyo
+                        modeloGrupo.rotation.y += (rotaçãoY * 1.5 - modeloGrupo.rotation.y) * 0.22;
+                        modeloGrupo.rotation.x += (rotaçãoX * 1.2 - modeloGrupo.rotation.x) * 0.22;
+                        modeloGrupo.rotation.z += (rotaçãoZ - modeloGrupo.rotation.z) * 0.22;
+                    }
+                }
+            }
+            
+            if (renderizador && cena && camera) {
+                renderizador.render(cena, camera);
+            }
+            requestAnimationFrame(cicloRastreamentoVapor);
+        }
+
+        function alternarElemento(tipo) {
+            if(objetoAvatar[tipo]) {
+                objetoAvatar[tipo].visible = !objetoAvatar[tipo].visible;
+                const btn = document.getElementById(`btn-${tipo}`);
+                btn.classList.toggle('ativo', objetoAvatar[tipo].visible);
+                btn.querySelector('span').innerText = objetoAvatar[tipo].visible ? 'ON' : 'OFF';
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

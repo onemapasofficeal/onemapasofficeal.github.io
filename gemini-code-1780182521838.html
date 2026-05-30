@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTuber 3D Overlay Pro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Roboto, sans-serif; }
+        
+        #app-container { position: relative; width: 100%; height: 100%; }
+
+        /* Câmera de fundo */
+        #webcam {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 1;
+        }
+
+        /* Camada do Jogo/Motor 3D */
+        #renderer-3d {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2;
+            pointer-events: none; /* Permite clicar nos botões atrás do 3D */
+        }
+
+        /* Menu Moderno Cyberpunk */
+        .menu-controles {
+            position: absolute;
+            bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            width: 90%; max-width: 460px;
+            background: rgba(10, 10, 12, 0.85);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 10;
+            color: white;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            box-shadow: 0px 0px 25px rgba(255, 71, 87, 0.2);
+        }
+
+        .menu-titulo {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-weight: 800;
+            color: #ff4757;
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        }
+
+        .grid-opcoes {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .btn-opcao {
+            background: #1e1e24;
+            color: #a4b0be;
+            border: 1px solid #333;
+            padding: 14px 5px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .btn-opcao.ativo {
+            background: linear-gradient(135deg, #ff4757, #ff6b81);
+            color: #fff;
+            border-color: #ff8b94;
+            box-shadow: 0 0 15px rgba(255, 71, 87, 0.6);
+            transform: scale(1.05);
+        }
+
+        /* Tela de Permissão Act */
+        #container-aviso {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: radial-gradient(circle, #1a1a24 0%, #0a0a0f 100%);
+            color: white; text-align: center; padding: 25px; z-index: 20;
+            transition: opacity 0.6s ease;
+        }
+
+        #container-aviso p { font-size: 18px; margin-bottom: 25px; color: #ced6e0; max-width: 320px; }
+
+        .btn-permitir {
+            background: #ff4757; color: white; border: none;
+            padding: 16px 40px; font-size: 16px; font-weight: bold;
+            border-radius: 40px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.4);
+            transition: 0.2s; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn-permitir:active { transform: scale(0.95); }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="container-aviso">
+            <p id="texto-aviso">O sistema tático 3D precisa de acesso à câmera para projeção do modelo.</p>
+            <button class="btn-permitir" onclick="iniciarCamera()">Ligar Câmera</button>
+        </div>
+
+        <video id="webcam" autoplay playsinline></video>
+        
+        <div id="renderer-3d"></div>
+
+        <div class="menu-controles">
+            <div class="menu-titulo">Módulos do Modelo 3D</div>
+            <div class="grid-opcoes">
+                <button class="btn-opcao ativo" id="btn-rosto" onclick="alternar3D('rosto')">Rosto</button>
+                <button class="btn-opcao ativo" id="btn-cabelo" onclick="alternar3D('cabelo')">Cabelo</button>
+                <button class="btn-opcao ativo" id="btn-olho" onclick="alternar3D('olho')">Olhos</button>
+                <button class="btn-opcao ativo" id="btn-nariz" onclick="alternar3D('nariz')">Nariz</button>
+                <button class="btn-opcao ativo" id="btn-boca" onclick="alternar3D('boca')">Boca</button>
+                <button class="btn-opcao ativo" id="btn-peitoral" onclick="alternar3D('peitoral')">Peitoral</button>
+                <button class="btn-opcao ativo" id="btn-tanquinhos" onclick="alternar3D('tanquinhos')">Tanquinho</button>
+                <button class="btn-opcao" id="btn-roupa" onclick="alternar3D('roupa')">Roupa</button>
+                <button class="btn-opcao" id="btn-calca" onclick="alternar3D('calca')">Calça</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const painelAviso = document.getElementById('container-aviso');
+        const textoAviso = document.getElementById('texto-aviso');
+        
+        // Variáveis do Motor 3D
+        let cena, camera, renderizador;
+        let objetoAvatar = {};
+
+        // Estado dos módulos 3D
+        const estado3D = {
+            rosto: true, cabelo: true, olho: true, nariz: true, 
+            boca: true, peitoral: true, tanquinhos: true, roupa: false, calca: false
+        };
+
+        // Inicializa a cena do motor 3D
+        function init3D() {
+            const container = document.getElementById('renderer-3d');
+            
+            cena = new THREE.Scene();
+            
+            // Câmera perspectiva para dar profundidade 3D real
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 6;
+            camera.position.y = 0.5;
+
+            renderizador = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+            renderizador.setPixelRatio(window.devicePixelRatio);
+            renderizador.shadowMap.enabled = true;
+            container.appendChild(renderizador.domElement);
+
+            // ILUMINAÇÃO CINEMATOGRÁFICA CYBERPUNK (Igual à foto de rua com neons)
+            const luzAmbiente = new THREE.AmbientLight(0x222233, 1.5);
+            cena.add(luzAmbiente);
+
+            // Luz Neon Vermelha vindo da esquerda
+            const luzNeonVermelha = new THREE.DirectionalLight(0xff0055, 3.5);
+            luzNeonVermelha.position.set(-3, 2, 2);
+            cena.add(luzNeonVermelha);
+
+            // Luz Neon Azul/Cian vindo da direita
+            const luzNeonAzul = new THREE.DirectionalLight(0x00ccff, 2.5);
+            luzNeonAzul.position.set(3, 1, 2);
+            cena.add(luzNeonAzul);
+
+            // Luz de contorno superior para destacar os músculos (Rim light)
+            const luzBranca = new THREE.PointLight(0xffffff, 2, 10);
+            luzBranca.position.set(0, 4, -1);
+            cena.add(luzBranca);
+
+            construirModelosManequim();
+            window.addEventListener('resize', onWindowResize);
+            animar();
+        }
+
+        // Cria as formas 3D anatômicas com materiais realistas (Sombreado do músculo)
+        function construirModelosManequim() {
+            // Material de pele realista com brilho anatômico (Shader Material simulado por MeshStandard)
+            const materialPele = new THREE.MeshStandardMaterial({
+                color: 0xe0a98c,
+                roughness: 0.3,  // Deixa a pele brilhando/suada igual na foto 3D
+                metalness: 0.1,
+                bumpScale: 0.05
+            });
+
+            const materialCabelo = new THREE.MeshStandardMaterial({ color: 0x15151a, roughness: 0.6 });
+            const materialOlho = new THREE.MeshBasicMaterial({ color: 0xff1e44 }); // Brilha no escuro
+            const materialRoupa = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.5, metalness: 0.4 });
+
+            // PEITORAL 3D (Cápsulas musculares esculpidas)
+            objetoAvatar.peitoral = new THREE.Group();
+            const peitoE = new THREE.Mesh(new THREE.SphereGeometry(0.6, 32, 16), materialPele);
+            peitoE.position.set(-0.4, -0.4, 0);
+            peitoE.scale.set(1, 0.7, 0.6);
+            const peitoD = peitoE.clone();
+            peitoD.position.x = 0.4;
+            objetoAvatar.peitoral.add(peitoE, peitoD);
+            
+            // Tronco base
+            const tronco = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.7, 1.8, 32), materialPele);
+            tronco.position.y = -1.1;
+            objetoAvatar.peitoral.add(tronco);
+            cena.add(objetoAvatar.peitoral);
+
+            // TANQUINHO (Gomos do abdômen em relevo 3D)
+            objetoAvatar.tanquinhos = new THREE.Group();
+            for(let i = 0; i < 3; i++) {
+                const gomoE = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.1), materialPele);
+                gomoE.position.set(-0.2, -0.8 - (i*0.25), 0.7);
+                const gomoD = gomoE.clone(); gomoD.position.x = 0.2;
+                objetoAvatar.tanquinhos.add(gomoE, gomoD);
+            }
+            cena.add(objetoAvatar.tanquinhos);
+
+            // ROSTO 3D
+            objetoAvatar.rosto = new THREE.Mesh(new THREE.SphereGeometry(0.7, 32, 32), materialPele);
+            objetoAvatar.rosto.position.y = 0.7;
+            objetoAvatar.rosto.scale.set(1, 1.2, 0.9);
+            cena.add(objetoAvatar.rosto);
+
+            // CABELO ANIME 3D (Com as pontas espetadas)
+            objetoAvatar.cabelo = new THREE.Group();
+            const baseCabelo = new THREE.Mesh(new THREE.SphereGeometry(0.75, 16, 16), materialCabelo);
+            baseCabelo.position.set(0, 0.85, -0.05);
+            objetoAvatar.cabelo.add(baseCabelo);
+            // Mechas espetadas (Cones 3D)
+            for(let i = 0; i < 8; i++) {
+                const mecha = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6, 4), materialCabelo);
+                mecha.position.set(Math.sin(i) * 0.5, 1.1, Math.cos(i) * 0.3 + 0.3);
+                mecha.rotation.z = (Math.random() - 0.5) * 0.5;
+                mecha.rotation.x = 0.5;
+                objetoAvatar.cabelo.add(mecha);
+            }
+            cena.add(objetoAvatar.cabelo);
+
+            // OLHOS 3D
+            objetoAvatar.olho = new THREE.Group();
+            const olhoE = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), materialOlho);
+            olhoE.position.set(-0.25, 0.75, 0.75);
+            const olhoD = olhoE.clone(); olhoD.position.x = 0.25;
+            objetoAvatar.olho.add(olhoE, olhoD);
+            cena.add(objetoAvatar.olho);
+
+            // NARIZ 3D
+            objetoAvatar.nariz = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.15, 4), materialPele);
+            objetoAvatar.nariz.position.set(0, 0.65, 0.82);
+            objetoAvatar.nariz.rotation.x = 0.2;
+            cena.add(objetoAvatar.nariz);
+
+            // BOCA 3D
+            objetoAvatar.boca = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 8, 24, Math.PI), new THREE.MeshBasicMaterial({color: 0x331111}));
+            objetoAvatar.boca.position.set(0, 0.52, 0.82);
+            objetoAvatar.boca.rotation.x = 0.2;
+            cena.add(objetoAvatar.boca);
+
+            // ROUPA (Colete tático aberto)
+            objetoAvatar.roupa = new THREE.Group();
+            const coleteE = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.5, 0.8), materialRoupa);
+            coleteE.position.set(-0.7, -0.9, 0.2);
+            const coleteD = coleteE.clone(); coleteD.position.x = 0.7;
+            objetoAvatar.roupa.add(coleteE, coleteD);
+            cena.add(objetoAvatar.roupa);
+            objetoAvatar.roupa.visible = false; // Começa desativado igual anterior
+
+            // CALÇA 3D
+            objetoAvatar.calca = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1, 32), materialRoupa);
+            objetoAvatar.calca.position.y = -2.2;
+            cena.add(objetoAvatar.calca);
+            objetoAvatar.calca.visible = false; // Começa desativado
+        }
+
+        // Liga/Desliga elementos do menu
+        function alternar3D(tipo) {
+            estado3D[tipo] = !estado3D[tipo];
+            if(objetoAvatar[tipo]) {
+                objetoAvatar[tipo].visible = estado3D[tipo];
+            }
+            document.getElementById(`btn-${tipo}`).classList.toggle('ativo', estado3D[tipo]);
+        }
+
+        // Loop de Renderização e Animação de Respiração 3D
+        function animar() {
+            requestAnimationFrame(animar);
+
+            // Efeito suave de respiração (Move o peito e tronco levemente)
+            const tempo = Date.now() * 0.002;
+            if(objetoAvatar.peitoral) {
+                objetoAvatar.peitoral.position.y = Math.sin(tempo) * 0.02;
+                objetoAvatar.tanquinhos.position.y = Math.sin(tempo) * 0.02;
+            }
+            if(objetoAvatar.rosto) {
+                objetoAvatar.rosto.position.y = 0.7 + Math.sin(tempo) * 0.01;
+                objetoAvatar.cabelo.position.y = Math.sin(tempo) * 0.01;
+                objetoAvatar.olho.position.y = Math.sin(tempo) * 0.01;
+                objetoAvatar.nariz.position.y = 0.65 + Math.sin(tempo) * 0.01;
+                objetoAvatar.boca.position.y = 0.52 + Math.sin(tempo) * 0.01;
+            }
+
+            renderizador.render(cena, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Função de Câmera com permissão nativa forçada
+        async function iniciarCamera() {
+            textoAviso.innerText = "Sincronizando com o navegador...";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                
+                painelAviso.style.opacity = '0';
+                setTimeout(() => {
+                    painelAviso.style.display = 'none';
+                    init3D(); // Liga o motor 3D só depois que a câmera aceitar
+                }, 600);
+            } catch (err) {
+                textoAviso.innerHTML = "<span style='color: #ff4757; font-weight:bold;'>Erro de Segurança!</span><br><br>O navegador bloqueou a câmera. Mude para um link HTTPS (como o CodePen) para autorizar.";
+            }
+        }
+    </script>
+</body>
+</html>

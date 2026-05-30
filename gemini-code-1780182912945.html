@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaiyo 3D VTuber Overlay</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Roboto, sans-serif; }
+        
+        #app-container { position: relative; width: 100%; height: 100%; display: flex; }
+
+        /* Câmera de fundo ocupando tudo */
+        #webcam {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 1;
+        }
+
+        /* Renderizador do Modelo 3D */
+        #renderer-3d {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Painel Posicionado na Lateral Direita */
+        .menu-controles {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 280px;
+            background: rgba(10, 10, 12, 0.85);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 10;
+            color: white;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            box-shadow: 0px 0px 25px rgba(255, 71, 87, 0.2);
+        }
+
+        .menu-titulo {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 800;
+            color: #ff4757;
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        }
+
+        .grid-opcoes {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* Scrollbar customizada para o menu lateral */
+        .grid-opcoes::-webkit-scrollbar { width: 4px; }
+        .grid-opcoes::-webkit-scrollbar-thumb { background: #ff4757; border-radius: 10px; }
+
+        .btn-opcao {
+            background: #1e1e24;
+            color: #a4b0be;
+            border: 1px solid #333;
+            padding: 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-opcao::after {
+            content: 'OFF';
+            font-size: 10px;
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        .btn-opcao.ativo {
+            background: linear-gradient(135deg, #ff4757, #ff6b81);
+            color: #fff;
+            border-color: #ff8b94;
+            box-shadow: 0 0 15px rgba(255, 71, 87, 0.4);
+        }
+
+        .btn-opcao.ativo::after {
+            content: 'ON';
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Tela de Inicialização */
+        #container-aviso {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: radial-gradient(circle, #1a1a24 0%, #0a0a0f 100%);
+            color: white; text-align: center; padding: 25px; z-index: 20;
+            transition: opacity 0.5s ease;
+        }
+
+        #container-aviso p { font-size: 18px; margin-bottom: 25px; color: #ced6e0; }
+
+        .btn-permitir {
+            background: #ff4757; color: white; border: none;
+            padding: 16px 40px; font-size: 16px; font-weight: bold;
+            border-radius: 40px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.4);
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="container-aviso">
+            <p id="texto-aviso">Sincronizando interface de controle lateral e rastreamento de câmera.</p>
+            <button class="btn-permitir" onclick="iniciarCamera()">Carregar Sistema Kaiyo</button>
+        </div>
+
+        <video id="webcam" autoplay playsinline></video>
+        <div id="renderer-3d"></div>
+
+        <div class="menu-controles">
+            <div class="menu-titulo">Módulos Kaiyo 3D</div>
+            <div class="grid-opcoes">
+                <button class="btn-opcao ativo" id="btn-rosto" onclick="alternar3D('rosto')">Rosto</button>
+                <button class="btn-opcao ativo" id="btn-cabelo" onclick="alternar3D('cabelo')">Cabelo</button>
+                <button class="btn-opcao ativo" id="btn-olho" onclick="alternar3D('olho')">Olhos</button>
+                <button class="btn-opcao ativo" id="btn-nariz" onclick="alternar3D('nariz')">Nariz</button>
+                <button class="btn-opcao ativo" id="btn-boca" onclick="alternar3D('boca')">Boca</button>
+                <button class="btn-opcao ativo" id="btn-peitoral" onclick="alternar3D('peitoral')">Peitoral</button>
+                <button class="btn-opcao ativo" id="btn-tanquinhos" onclick="alternar3D('tanquinhos')">Tanquinho</button>
+                <button class="btn-opcao" id="btn-roupa" onclick="alternar3D('roupa')">Roupa</button>
+                <button class="btn-opcao" id="btn-calca" onclick="alternar3D('calca')">Calça</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const painelAviso = document.getElementById('container-aviso');
+        const textoAviso = document.getElementById('texto-aviso');
+        
+        let cena, camera, renderizador;
+        let objetoAvatar = {};
+
+        const estado3D = {
+            rosto: true, cabelo: true, olho: true, nariz: true, 
+            boca: true, peitoral: true, tanquinhos: true, roupa: false, calca: false
+        };
+
+        function init3D() {
+            const container = document.getElementById('renderer-3d');
+            cena = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Move a câmera um pouco para a esquerda para compensar o painel da direita
+            camera.position.set(-0.5, 0.2, 5.5);
+
+            renderizador = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+            renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderizador.domElement);
+
+            // Luz ambiente suave de preenchimento
+            cena.add(new THREE.AmbientLight(0x333344, 1.8));
+
+            // Luzes de estúdio quentes e frias simulando o cenário original do Kaiyo
+            const luzEsquerda = new THREE.DirectionalLight(0xff4500, 2.5); // Vermelho/Laranja de fundo
+            luzEsquerda.position.set(-4, 3, 3);
+            cena.add(luzEsquerda);
+
+            const luzDireita = new THREE.DirectionalLight(0x00a8ff, 2.0); // Azul/Ciano tático
+            luzDireita.position.set(4, 1, 2);
+            cena.add(luzDireita);
+
+            const luzFrontal = new THREE.PointLight(0xffffff, 1.2, 10); // Luz suave no rosto
+            luzFrontal.position.set(0, 2, 3);
+            cena.add(luzFrontal);
+
+            esculpirKaiyo();
+            window.addEventListener('resize', onWindowResize);
+            animar();
+        }
+
+        function esculpirKaiyo() {
+            // Material de pele com acabamento acetinado (High specular) igual ao modelo original
+            const peleKaiyo = new THREE.MeshStandardMaterial({
+                color: 0xffd3b6, roughness: 0.25, metalness: 0.05
+            });
+            const cabeloMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1f, roughness: 0.5 });
+            const marcasRostoMaterial = new THREE.MeshBasicMaterial({ color: 0xcc2233 });
+            const metalOuro = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.2, metalness: 0.8 });
+            const tecidoTatico = new THREE.MeshStandardMaterial({ color: 0x16161a, roughness: 0.7 });
+
+            // 1. ROSTO
+            objetoAvatar.rosto = new THREE.Group();
+            const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 32), peleKaiyo);
+            cabeca.scale.set(1, 1.25, 0.9);
+            objetoAvatar.rosto.add(cabeca);
+            
+            // Marcas vermelhas nas bochechas (Tatuagens tribais do Kaiyo)
+            const marcaE = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.02), marcasRostoMaterial);
+            marcaE.position.set(-0.35, 0.05, 0.45);
+            marcaE.rotation.y = -0.5;
+            const marcaD = marcaE.clone(); marcaD.position.x = 0.35; marcaD.rotation.y = 0.5;
+            objetoAvatar.rosto.add(marcaE, marcaD);
+            objetoAvatar.rosto.position.y = 0.8;
+            cena.add(objetoAvatar.rosto);
+
+            // 2. CABELO + ORELHAS DE LOBO
+            objetoAvatar.cabelo = new THREE.Group();
+            const crinaBase = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), cabeloMaterial);
+            crinaBase.position.y = 0.95;
+            objetoAvatar.cabelo.add(crinaBase);
+
+            // Orelha de Lobo Esquerda
+            const orelhaE = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 4), cabeloMaterial);
+            orelhaE.position.set(-0.35, 1.4, 0);
+            orelhaE.rotation.z = 0.3;
+            orelhaE.scale.set(1, 1, 0.5);
+            // Parte interna da orelha (Pele)
+            const orelhaInternaE = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), peleKaiyo);
+            orelhaInternaE.position.set(-0.33, 1.38, 0.04);
+            orelhaInternaE.rotation.z = 0.3;
+            orelhaInternaE.scale.set(1, 1, 0.2);
+            
+            // Orelha de Lobo Direita
+            const orelhaD = orelhaE.clone(); orelhaD.position.x = 0.35; orelhaD.rotation.z = -0.3;
+            const orelhaInternaD = orelhaInternaE.clone(); orelhaInternaD.position.x = 0.33; orelhaInternaD.rotation.z = -0.3;
+            objetoAvatar.cabelo.add(orelhaE, orelhaInternaE, orelhaD, orelhaInternaD);
+
+            // Mechas espetadas do cabelo anime do Kaiyo
+            for(let i = 0; i < 12; i++) {
+                const mecha = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), cabeloMaterial);
+                mecha.position.set(Math.sin(i)*0.4, 1.1, Math.cos(i)*0.2 + 0.3);
+                mecha.rotation.z = (Math.random() - 0.5) * 0.6;
+                mecha.rotation.x = 0.4;
+                objetoAvatar.cabelo.add(mecha);
+            }
+            cena.add(objetoAvatar.cabelo);
+
+            // 3. OLHOS (Amendoados e expressivos)
+            objetoAvatar.olho = new THREE.Group();
+            const globoOlhoE = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            globoOlhoE.position.set(-0.2, 0.85, 0.45);
+            globoOlhoE.scale.set(1.5, 1, 0.5);
+            const pupilaE = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), new THREE.MeshBasicMaterial({color: 0xffaa00})); // Olhos dourados
+            pupilaE.position.set(-0.2, 0.85, 0.49);
+            
+            const globoOlhoD = globoOlhoE.clone(); globoOlhoD.position.x = 0.2;
+            const pupilaD = pupilaE.clone(); pupilaD.position.x = 0.2;
+            objetoAvatar.olho.add(globoOlhoE, pupilaE, globoOlhoD, pupilaD);
+            cena.add(objetoAvatar.olho);
+
+            // 4. NARIZ
+            objetoAvatar.nariz = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), peleKaiyo);
+            objetoAvatar.nariz.position.set(0, 0.74, 0.52);
+            objetoAvatar.nariz.rotation.x = 0.25;
+            cena.add(objetoAvatar.nariz);
+
+            // 5. BOCA (Com dentes de canino proeminentes)
+            objetoAvatar.boca = new THREE.Group();
+            const contornoBoca = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.015, 8, 24, Math.PI), new THREE.MeshBasicMaterial({color: 0x4a1515}));
+            contornoBoca.position.set(0, 0.62, 0.5);
+            contornoBoca.rotation.x = 0.1;
+            // Caninos afiados
+            const caninoE = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 4), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            caninoE.position.set(-0.05, 0.63, 0.51);
+            caninoE.rotation.x = Math.PI;
+            const caninoD = caninoE.clone(); caninoD.position.x = 0.05;
+            objetoAvatar.boca.add(contornoBoca, caninoE, caninoD);
+            cena.add(objetoAvatar.boca);
+
+            // 6. PEITORAL ANATOMIA HIPER-DEFINIDA
+            objetoAvatar.peitoral = new THREE.Group();
+            const peitoE = new THREE.Mesh(new THREE.SphereGeometry(0.48, 32, 16), peleKaiyo);
+            peitoE.position.set(-0.32, -0.15, 0.1);
+            peitoE.scale.set(1, 0.75, 0.6);
+            const peitoD = peitoE.clone(); peitoD.position.x = 0.32;
+            objetoAvatar.peitoral.add(peitoE, peitoD);
+            
+            // Tronco/Abdomen base musculoso
+            const tronco = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.55, 1.6, 32), peleKaiyo);
+            tronco.position.y = -0.7;
+            objetoAvatar.peitoral.add(tronco);
+
+            // Colar com Placa de Identificação Militar do Kaiyo
+            const corrente = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.015, 6, 32), metalOuro);
+            corrente.position.set(0, 0.15, 0.1);
+            corrente.rotation.x = Math.PI / 2.5;
+            const placaMilitar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.02), metalOuro);
+            placaMilitar.position.set(0, -0.08, 0.38);
+            objetoAvatar.peitoral.add(corrente, placaMilitar);
+            cena.add(objetoAvatar.peitoral);
+
+            // 7. ABDÔMEN TANQUINHO EXTREMO (8 Gomos esculpidos em 3D)
+            objetoAvatar.tanquinhos = new THREE.Group();
+            for(let i = 0; i < 4; i++) {
+                const gomoE = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), peleKaiyo);
+                gomoE.scale.set(1.1, 0.7, 0.5);
+                gomoE.position.set(-0.16, -0.45 - (i * 0.2), 0.42 - (i * 0.03));
+                const gomoD = gomoE.clone(); gomoD.position.x = 0.16;
+                objetoAvatar.tanquinhos.add(gomoE, gomoD);
+            }
+            cena.add(objetoAvatar.tanquinhos);
+
+            // 8. ROUPA (Colete Militar Aberto nas laterais)
+            objetoAvatar.roupa = new THREE.Group();
+            const abaColeteE = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.2, 0.6), tecidoTatico);
+            abaColeteE.position.set(-0.65, -0.6, 0.2);
+            const abaColeteD = abaColeteE.clone(); abaColeteD.position.x = 0.65;
+            objetoAvatar.roupa.add(abaColeteE, abaColeteD);
+            cena.add(objetoAvatar.roupa);
+            objetoAvatar.roupa.visible = false;
+
+            // 9. CALÇA + CINTO DE UTILIDADES TÁTICO
+            objetoAvatar.calca = new THREE.Group();
+            const calcaBase = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.8, 32), tecidoTatico);
+            calcaBase.position.y = -1.6;
+            objetoAvatar.calca.add(calcaBase);
+            // Bolsos táticos tridimensionais do cinto
+            for(let i = 0; i < 4; i++) {
+                const bolso = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.15), tecidoTatico);
+                bolso.position.set(Math.sin(i - 1.5) * 0.6, -1.3, Math.cos(i - 1.5) * 0.6);
+                objetoAvatar.calca.add(bolso);
+            }
+            cena.add(objetoAvatar.calca);
+            objetoAvatar.calca.visible = false;
+        }
+
+        function alternar3D(tipo) {
+            estado3D[tipo] = !estado3D[tipo];
+            if(objetoAvatar[tipo]) objetoAvatar[tipo].visible = estado3D[tipo];
+            document.getElementById(`btn-${tipo}`).classList.toggle('ativo', estado3D[tipo]);
+        }
+
+        function animar() {
+            requestAnimationFrame(animar);
+            const tempo = Date.now() * 0.0025;
+            
+            // Animação fluida de respiração simulada nos eixos corretos
+            const deslocamento = Math.sin(tempo) * 0.015;
+            
+            if(objetoAvatar.peitoral) {
+                objetoAvatar.peitoral.position.y = deslocamento;
+                objetoAvatar.tanquinhos.position.y = deslocamento;
+            }
+            if(objetoAvatar.rosto) {
+                const yOrganico = Math.sin(tempo) * 0.008;
+                objetoAvatar.rosto.position.y = 0.8 + yOrganico;
+                objetoAvatar.cabelo.position.y = yOrganico;
+                objetoAvatar.olho.position.y = yOrganico;
+                objetoAvatar.nariz.position.y = 0.74 + yOrganico;
+                objetoAvatar.boca.position.y = yOrganico;
+            }
+            renderizador.render(cena, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        async function iniciarCamera() {
+            textoAviso.innerText = "Sincronizando malhas tridimensionais...";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false 
+                });
+                video.srcObject = stream;
+                painelAviso.style.opacity = '0';
+                setTimeout(() => {
+                    painelAviso.style.display = 'none';
+                    init3D();
+                }, 500);
+            } catch (err) {
+                textoAviso.innerHTML = "<span style='color: #ff4757; font-weight:bold;'>Permissão Requerida</span><br><br>Para renderizar o modelo 3D sobreposto, hospede o arquivo em um servidor seguro (HTTPS).";
+            }
+        }
+    </script>
+</body>
+</html>

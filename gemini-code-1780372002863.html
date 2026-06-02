@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Fitness Quiz & Anti-Distração</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --primary-color: #38bdf8;
+            --primary-hover: #0ea5e9;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #f43f5e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .quiz-container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            position: relative;
+            min-height: 520px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            z-index: 5;
+        }
+
+        /* PROGRESS BAR */
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary-color);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        /* PASSOS (STEPS) */
+        .step { display: none; animation: fadeIn 0.4s ease forwards; }
+        .step.active { display: flex; flex-direction: column; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        h2 { text-align: center; margin-bottom: 10px; font-size: 1.6rem;}
+        p.subtitle { color: var(--text-muted); text-align: center; margin-bottom: 25px; font-size: 0.95rem; }
+
+        /* BOTÕES E INPUTS */
+        .options-grid { display: grid; gap: 12px; width: 100%; }
+        .btn-option {
+            background: #334155; border: 2px solid transparent; color: var(--text-color);
+            padding: 15px 20px; border-radius: 12px; cursor: pointer; text-align: left;
+            font-size: 1rem; display: flex; justify-content: space-between; transition: all 0.2s;
+        }
+        .btn-option:hover { background: #475569; border-color: var(--primary-color); }
+        
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.9rem;}
+        input {
+            width: 100%; padding: 15px; background: #334155; border: 2px solid transparent;
+            border-radius: 12px; color: #fff; font-size: 1.1rem; outline: none;
+        }
+        input:focus { border-color: var(--primary-color); }
+
+        .nav-buttons { display: flex; gap: 15px; margin-top: 25px; }
+        .btn-next, .btn-back, .btn-start { padding: 15px 25px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
+        .btn-start, .btn-next { background: var(--primary-color); color: #0f172a; flex: 2; }
+        .btn-back { background: #334155; color: var(--text-color); flex: 1; }
+
+        /* CAMERA CONTAINER NA TELA DE TREINO */
+        .camera-box {
+            width: 100%; height: 180px; background: #000; border-radius: 12px;
+            margin-bottom: 15px; overflow: hidden; position: relative;
+            border: 2px solid #334155;
+        }
+        #webcam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .camera-badge {
+            position: absolute; top: 10px; left: 10px; background: rgba(244, 63, 94, 0.8);
+            padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .dot { width: 8px; height: 8px; background: #fff; border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+
+        .resultado-box { background: #0f172a; padding: 20px; border-radius: 12px; border-left: 4px solid var(--primary-color); }
+
+        /* TELA DE ALERTA AGRESSIVO (ANTI-DISTRAÇÃO) */
+        #anti-distracao-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(244, 63, 94, 0.98); z-index: 99999;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; padding: 20px;
+            animation: flashBg 0.5s infinite alternate;
+        }
+        @keyframes flashBg { 
+            0% { background: rgba(244, 63, 94, 0.98); } 
+            100% { background: rgba(159, 18, 57, 0.99); } 
+        }
+        .alerta-titulo { font-size: 3rem; font-weight: 900; color: #fff; text-shadow: 2px 4px 10px rgba(0,0,0,0.5); line-height: 1.1; margin-bottom: 20px; }
+        .alerta-marca { font-size: 1.8rem; font-weight: bold; color: #000; background: #fff; padding: 5px 20px; border-radius: 50px; margin-top: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .btn-voltar-treino { margin-top: 30px; padding: 15px 40px; font-size: 1.2rem; background: #fff; color: #f43f5e; border: none; border-radius: 50px; font-weight: bold; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+
+    <div id="anti-distracao-overlay">
+        <div class="alerta-titulo">EI PARE DE MEXER NO SEU CELULAR<br>VÁ TREINAR! 😡💪</div>
+        <button class="btn-voltar-treino" onclick="voltarAoTreino()">VOLTEI A TREINAR</button>
+        <div class="alerta-marca">@all-treinos</div>
+    </div>
+
+    <div class="quiz-container">
+        <div class="progress-container" id="progressBarContainer"><div class="progress-bar" id="progressBar"></div></div>
+
+        <div class="step active" id="step-0">
+            <h2 style="font-size: 2rem; color: var(--primary-color)">Avaliação Física ⚡</h2>
+            <p class="subtitle">Responda o quiz para liberar seu treino com IA monitorada por câmera.</p>
+            <button class="btn-start" onclick="nextStep()">Começar Avaliação</button>
+        </div>
+
+        <div class="step" id="step-1">
+            <h2>Qual é o seu sexo biológico?</h2>
+            <p class="subtitle">Ajuste de metabolismo e queima hormonal.</p>
+            <div class="options-grid">
+                <button class="btn-option" onclick="selectOption('sexo', 'Masculino')">Masculino <span>♂</span></button>
+                <button class="btn-option" onclick="selectOption('sexo', 'Feminino')">Feminino <span>♀</span></button>
+            </div>
+        </div>
+
+        <div class="step" id="step-2">
+            <h2>Qual seu principal objetivo?</h2>
+            <div class="options-grid">
+                <button class="btn-option" onclick="selectOption('objetivo', 'Emagrecer')">Perder Peso / Emagrecer</button>
+                <button class="btn-option" onclick="selectOption('objetivo', 'Ganhar Massa')">Ganhar Massa / Hipertrofia</button>
+            </div>
+        </div>
+
+        <div class="step" id="step-3">
+            <h2>Métricas Corporais</h2>
+            <div class="input-group"><label>Ano de Nascimento</label><input type="number" id="input-ano" placeholder="Ex: 1998"></div>
+            <div class="input-group"><label>Altura (cm)</label><input type="number" id="input-altura" placeholder="Ex: 170"></div>
+            <div class="input-group"><label>Peso Atual (kg)</label><input type="number" id="input-peso" placeholder="Ex: 70"></div>
+            <div class="nav-buttons">
+                <button class="btn-back" onclick="prevStep()">Voltar</button>
+                <button class="btn-next" onclick="validateInputs()">Avançar</button>
+            </div>
+        </div>
+
+        <div class="step" id="step-4">
+            <h2>Onde você costuma treinar?</h2>
+            <div class="options-grid">
+                <button class="btn-option" onclick="selectOption('local', 'Em Casa')">🏠 Em Casa</button>
+                <button class="btn-option" onclick="selectOption('local', 'Na Academia')">🏋️ Na Academia</button>
+            </div>
+        </div>
+
+        <div class="step" id="step-5">
+            <h2>Você sente dor em alguma região?</h2>
+            <div class="options-grid">
+                <button class="btn-option" onclick="selectFinalOption('dor', 'Nenhuma dor')">❌ Não sinto dores</button>
+                <button class="btn-option" onclick="selectFinalOption('dor', 'Articulações/Joelhos')">⚠️ Sim, nos joelhos / coluna</button>
+            </div>
+        </div>
+
+        <div class="step" id="step-resultado">
+            <h2 style="color: var(--primary-color); margin-bottom: 5px;">Seu Treino Gerado! 🔥</h2>
+            <p class="subtitle" style="margin-bottom: 15px;">A câmera está ativa. <b>Não mexa no celular ou mude de aba!</b></p>
+            
+            <div class="camera-box">
+                <div class="camera-badge"><div class="dot"></div> IA ANALISANDO MOVIMENTO</div>
+                <video id="webcam" autoplay playsinline muted></video>
+            </div>
+
+            <div class="resultado-box">
+                <h3 id="res-titulo" style="color: var(--primary-color); margin-bottom: 8px;">Carregando...</h3>
+                <div id="res-exercicios" style="font-size: 0.95rem; line-height: 1.5;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let userData = {};
+        let currentStep = 0;
+        const totalSteps = 5;
+        let monitoramentoAtivo = false;
+        let tempoInatividade;
+
+        function updateProgressBar() {
+            const container = document.getElementById('progressBarContainer');
+            const bar = document.getElementById('progressBar');
+            if(currentStep === 0 || currentStep === 'resultado') {
+                container.style.display = 'none';
+            } else {
+                container.style.display = 'block';
+                bar.style.width = `${(currentStep / totalSteps) * 100}%`;
+            }
+        }
+
+        function showStep(idx) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById(`step-${idx}`);
+            if(target) target.classList.add('active');
+            updateProgressBar();
+        }
+
+        function nextStep() { currentStep++; showStep(currentStep); }
+        function prevStep() { currentStep--; showStep(currentStep); }
+
+        function selectOption(key, val) { userData[key] = val; nextStep(); }
+
+        function validateInputs() {
+            if(!document.getElementById('input-ano').value || !document.getElementById('input-altura').value || !document.getElementById('input-peso').value) {
+                alert('Preencha os dados corporais!'); return;
+            }
+            userData.ano = document.getElementById('input-ano').value;
+            nextStep();
+        }
+
+        function selectFinalOption(key, val) {
+            userData[key] = val;
+            currentStep = 'resultado';
+            showStep('resultado');
+            ativarCameraESistemaAntiDistracao();
+            montarTreino();
+        }
+
+        function montarTreino() {
+            const tit = document.getElementById('res-titulo');
+            const exs = document.getElementById('res-exercicios');
+            tit.innerText = `Rotina Focada: ${userData.objetivo}`;
+            
+            if(userData.local === "Em Casa") {
+                exs.innerHTML = "• 4x 15 Agachamentos Livres<br>• 4x Max Flexões de Braço<br>• 3x 45s Prancha Isométrica<br>• 3x 20 Polichinelos";
+            } else {
+                exs.innerHTML = "• 4x 10 Leg Press (Pesado)<br>• 4x 10 Supino Reto<br>• 3x 12 Puxada Alta Puxador<br>• 3x 15 Abdominais na Polia";
+            }
+        }
+
+        function ativarCameraESistemaAntiDistracao() {
+            const video = document.getElementById('webcam');
+            
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(function(stream) {
+                    video.srcObject = stream;
+                })
+                .catch(function(err) {
+                    console.log("Câmera bloqueada ou não encontrada: ", err);
+                });
+            }
+
+            monitoramentoAtivo = true;
+            resetTimerInatividade();
+
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden && monitoramentoAtivo) {
+                    dispararAlertaPegouCelular();
+                }
+            });
+
+            window.addEventListener('mousemove', resetTimerInatividade);
+            window.addEventListener('touchstart', resetTimerInatividade);
+            window.addEventListener('click', resetTimerInatividade);
+            window.addEventListener('scroll', resetTimerInatividade);
+        }
+
+        function resetTimerInatividade() {
+            if (!monitoramentoAtivo) return;
+            clearTimeout(tempoInatividade);
+            tempoInatividade = setTimeout(dispararAlertaPegouCelular, 8000); 
+        }
+
+        function dispararAlertaPegouCelular() {
+            document.getElementById('anti-distracao-overlay').style.display = 'flex';
+        }
+
+        function voltarAoTreino() {
+            document.getElementById('anti-distracao-overlay').style.display = 'none';
+            resetTimerInatividade();
+        }
+    </script>
+</body>
+</html>
